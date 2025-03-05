@@ -1,0 +1,28 @@
+[project]
+authors = ["horned_axe <horned_axe@proton.me>"]
+channels = ["nvidia/label/cuda-11.8.0","nvidia", "conda-forge", "pytorch"]
+description = "Add a short description here"
+name = "Infogcn"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = "3.8"
+setuptools = "*"
+cuda = { version = "*", channel = "nvidia/label/cuda-11.8.0" }
+pytorch = { version = "1.7.0", channel = "pytorch" }
+torchvision = { version = "*", channel = "pytorch" }
+pytorch-cuda = { version = "11.8", channel = "pytorch" }
+pyyaml = "*"
+tqdm = "*"
+tensorboardX = "*"
+einops = "*"
+timm = "*"
+scikit-learn = "*"
+matplotlib = "*"
+numpy = "1.19.2"
+nvidia-apex = ">=0.1,<0.2"
+wandb = "*"
+mkl = "2024.0"
