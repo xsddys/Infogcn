@@ -1,36 +1,39 @@
 #!/usr/bin/env python
 from __future__ import print_function
 
-import os
-import sys
-import time
 import glob
+import os
 import pickle
-import random
-import traceback
 
 # 添加平台检查
 import platform
-if platform.system() != 'Windows':
+import random
+import sys
+import time
+import traceback
+
+import yaml  # Added YAML import
+
+if platform.system() != "Windows":
     import resource
+
     rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
     resource.setrlimit(resource.RLIMIT_NOFILE, (2048, rlimit[1]))
 
 from collections import OrderedDict
 
-#import apex
+import apex
+import numpy as np
 import torch
 import torch.optim as optim
-import numpy as np
-
 from tqdm import tqdm
-from sklearn.metrics import confusion_matrix
 
 from args import get_parser
 from loss import LabelSmoothingCrossEntropy, get_mmd_loss
 from model.infogcn import InfoGCN
-from utils import get_vector_property
 from utils import BalancedSampler as BS
+from utils import get_vector_property
+
 
 def init_seed(seed):
     torch.cuda.manual_seed_all(seed)
@@ -41,18 +44,22 @@ def init_seed(seed):
     torch.backends.cudnn.deterministic = False
     torch.backends.cudnn.benchmark = True
 
+
 def import_class(import_str):
-    mod_str, _sep, class_str = import_str.rpartition('.')
+    mod_str, _sep, class_str = import_str.rpartition(".")
     __import__(mod_str)
     try:
         return getattr(sys.modules[mod_str], class_str)
     except AttributeError:
-        raise ImportError('Class %s cannot be found (%s)' % (class_str, traceback.format_exception(*sys.exc_info())))
+        raise ImportError(
+            "Class %s cannot be found (%s)"
+            % (class_str, traceback.format_exception(*sys.exc_info()))
+        )
 
 
-class Processor():
+class Processor:
     """
-        Processor for Skeleton-based Action Recgnition
+    Processor for Skeleton-based Action Recgnition
     """
 
     def __init__(self, arg):
@@ -62,7 +69,7 @@ class Processor():
         # pdb.set_trace()
         self.load_model()
 
-        if self.arg.phase == 'model_size':
+        if self.arg.phase == "model_size":
             pass
         else:
             self.load_optimizer()
@@ -74,22 +81,23 @@ class Processor():
 
         if self.arg.half:
             self.model, self.optimizer = apex.amp.initialize(
-                model,
-                self.optimizer,
-                opt_level=f'O{self.arg.amp_opt_level}'
+                model, self.optimizer, opt_level=f"O{self.arg.amp_opt_level}"
             )
             if self.arg.amp_opt_level != 1:
-                self.print_log('[WARN] nn.DataParallel is not yet supported by amp_opt_level != "O1"')
+                self.print_log(
+                    '[WARN] nn.DataParallel is not yet supported by amp_opt_level != "O1"'
+                )
 
         # self.model = torch.nn.DataParallel(model, device_ids=(0,1,2))
 
     def load_data(self):
         Feeder = import_class(self.arg.feeder)
         self.data_loader = dict()
-        data_path = f'data/{self.arg.dataset}/{self.arg.datacase}_aligned.npz'
-        if self.arg.phase == 'train':
-            dt = Feeder(data_path=data_path,
-                split='train',
+        data_path = f"data/{self.arg.dataset}/{self.arg.datacase}_aligned.npz"
+        if self.arg.phase == "train":
+            dt = Feeder(
+                data_path=data_path,
+                split="train",
                 window_size=64,
                 p_interval=[0.5, 1],
                 vel=self.arg.use_vel,
@@ -102,7 +110,7 @@ class Processor():
             else:
                 sampler = None
                 shuffle = True
-            self.data_loader['train'] = torch.utils.data.DataLoader(
+            self.data_loader["train"] = torch.utils.data.DataLoader(
                 dataset=dt,
                 sampler=sampler,
                 batch_size=self.arg.batch_size,
@@ -110,21 +118,23 @@ class Processor():
                 num_workers=self.arg.num_worker,
                 drop_last=True,
                 pin_memory=True,
-                worker_init_fn=init_seed)
-        self.data_loader['test'] = torch.utils.data.DataLoader(
+                worker_init_fn=init_seed,
+            )
+        self.data_loader["test"] = torch.utils.data.DataLoader(
             dataset=Feeder(
                 data_path=data_path,
-                split='test',
+                split="test",
                 window_size=64,
                 p_interval=[0.95],
-                vel=self.arg.use_vel
+                vel=self.arg.use_vel,
             ),
             batch_size=self.arg.test_batch_size,
             shuffle=False,
             num_workers=self.arg.num_worker,
             drop_last=False,
             pin_memory=True,
-            worker_init_fn=init_seed)
+            worker_init_fn=init_seed,
+        )
 
     def load_model(self):
         self.model = InfoGCN(
@@ -137,74 +147,85 @@ class Processor():
             num_head=self.arg.n_heads,
             k=self.arg.k,
             noise_ratio=self.arg.noise_ratio,
-            gain=self.arg.z_prior_gain
+            gain=self.arg.z_prior_gain,
         )
         self.loss = LabelSmoothingCrossEntropy().cuda()
 
         if self.arg.weights:
-            self.global_step = int(self.arg.weights[:-3].split('-')[-1])
-            self.print_log('Load weights from {}.'.format(self.arg.weights))
-            if '.pkl' in self.arg.weights:
-                with open(self.arg.weights, 'r') as f:
+            self.global_step = int(self.arg.weights[:-3].split("-")[-1])
+            self.print_log("Load weights from {}.".format(self.arg.weights))
+            if ".pkl" in self.arg.weights:
+                with open(self.arg.weights, "r") as f:
                     weights = pickle.load(f)
             else:
                 weights = torch.load(self.arg.weights)
 
-            weights = OrderedDict([[k.split('module.')[-1], v.cuda()] for k, v in weights.items()])
+            weights = OrderedDict(
+                [[k.split("module.")[-1], v.cuda()] for k, v in weights.items()]
+            )
 
             keys = list(weights.keys())
             for w in self.arg.ignore_weights:
                 for key in keys:
                     if w in key:
                         if weights.pop(key, None) is not None:
-                            self.print_log('Sucessfully Remove Weights: {}.'.format(key))
+                            self.print_log(
+                                "Sucessfully Remove Weights: {}.".format(key)
+                            )
                         else:
-                            self.print_log('Can Not Remove Weights: {}.'.format(key))
+                            self.print_log("Can Not Remove Weights: {}.".format(key))
 
             try:
                 self.model.load_state_dict(weights)
             except:
                 state = self.model.state_dict()
                 diff = list(set(state.keys()).difference(set(weights.keys())))
-                print('Can not find these weights:')
+                print("Can not find these weights:")
                 for d in diff:
-                    print('  ' + d)
+                    print("  " + d)
                 state.update(weights)
                 self.model.load_state_dict(state)
 
     def load_optimizer(self):
-        if self.arg.optimizer == 'SGD':
+        if self.arg.optimizer == "SGD":
             self.optimizer = optim.SGD(
                 self.model.parameters(),
                 lr=self.arg.base_lr,
                 momentum=0.9,
                 nesterov=self.arg.nesterov,
-                weight_decay=self.arg.weight_decay)
-        elif self.arg.optimizer == 'Adam':
+                weight_decay=self.arg.weight_decay,
+            )
+        elif self.arg.optimizer == "Adam":
             self.optimizer = optim.Adam(
                 self.model.parameters(),
                 lr=self.arg.base_lr,
-                weight_decay=self.arg.weight_decay)
+                weight_decay=self.arg.weight_decay,
+            )
         else:
             raise ValueError()
 
-        self.print_log('using warm up, epoch: {}'.format(self.arg.warm_up_epoch))
+        self.print_log("using warm up, epoch: {}".format(self.arg.warm_up_epoch))
 
     def save_arg(self):
         # save arg
         arg_dict = vars(self.arg)
         if not os.path.exists(self.arg.work_dir):
             os.makedirs(self.arg.work_dir)
+        # Save as YAML
+        with open("{}/config.yaml".format(self.arg.work_dir), "w") as f:
+            f.write(f"# command line: {' '.join(sys.argv)}\n\n")
+            yaml.dump(arg_dict, f)
 
     def adjust_learning_rate(self, epoch):
-        if self.arg.optimizer == 'SGD' or self.arg.optimizer == 'Adam':
+        if self.arg.optimizer == "SGD" or self.arg.optimizer == "Adam":
             if epoch < self.arg.warm_up_epoch and self.arg.weights is None:
                 lr = self.arg.base_lr * (epoch + 1) / self.arg.warm_up_epoch
             else:
                 lr = self.arg.base_lr * (
-                        self.arg.lr_decay_rate ** np.sum(epoch >= np.array(self.arg.step)))
+                    self.arg.lr_decay_rate ** np.sum(epoch >= np.array(self.arg.step))
+                )
             for param_group in self.optimizer.param_groups:
-                param_group['lr'] = lr
+                param_group["lr"] = lr
             return lr
         else:
             raise ValueError()
@@ -216,10 +237,10 @@ class Processor():
     def print_log(self, str, print_time=True):
         if print_time:
             localtime = time.asctime(time.localtime(time.time()))
-            str = "[ " + localtime + ' ] ' + str
+            str = "[ " + localtime + " ] " + str
         print(str)
         if self.arg.print_log:
-            with open('{}/log.txt'.format(self.arg.work_dir), 'a') as f:
+            with open("{}/log.txt".format(self.arg.work_dir), "a") as f:
                 print(str, file=f)
 
     def record_time(self):
@@ -233,7 +254,7 @@ class Processor():
 
     def train(self, epoch, save_model=False):
         self.model.train()
-        self.print_log('Training epoch: {}'.format(epoch + 1))
+        self.print_log("Training epoch: {}".format(epoch + 1))
         self.adjust_learning_rate(epoch)
 
         loss_value = []
@@ -248,16 +269,18 @@ class Processor():
         self.record_time()
         timer = dict(dataloader=0.001, model=0.001, statistics=0.001)
 
-        for data, y, index in tqdm(self.data_loader['train'], dynamic_ncols=True):
+        for data, y, index in tqdm(self.data_loader["train"], dynamic_ncols=True):
             self.global_step += 1
             with torch.no_grad():
                 data = data.float().cuda()
                 y = y.long().cuda()
-            timer['dataloader'] += self.split_time()
+            timer["dataloader"] += self.split_time()
 
             # forward
             y_hat, z = self.model(data)
-            mmd_loss, l2_z_mean, z_mean = get_mmd_loss(z, self.model.z_prior, y, self.arg.num_class)
+            mmd_loss, l2_z_mean, z_mean = get_mmd_loss(
+                z, self.model.z_prior, y, self.arg.num_class
+            )
             cos_z, dis_z = get_vector_property(z_mean)
             cos_z_prior, dis_z_prior = get_vector_property(self.model.z_prior)
             cos_z_value.append(cos_z.data.item())
@@ -266,7 +289,9 @@ class Processor():
             dis_z_prior_value.append(dis_z_prior.data.item())
 
             cls_loss = self.loss(y_hat, y)
-            loss = self.arg.lambda_2* mmd_loss + self.arg.lambda_1* l2_z_mean + cls_loss
+            loss = (
+                self.arg.lambda_2 * mmd_loss + self.arg.lambda_1 * l2_z_mean + cls_loss
+            )
             # backward
             self.optimizer.zero_grad()
             if self.arg.half:
@@ -280,31 +305,40 @@ class Processor():
             loss_value.append(cls_loss.data.item())
             mmd_loss_value.append(mmd_loss.data.item())
             l2_z_mean_value.append(l2_z_mean.data.item())
-            timer['model'] += self.split_time()
+            timer["model"] += self.split_time()
 
             value, predict_label = torch.max(y_hat.data, 1)
             acc = torch.mean((predict_label == y.data).float())
             acc_value.append(acc.data.item())
 
-            timer['statistics'] += self.split_time()
+            timer["statistics"] += self.split_time()
 
         # statistics of time consumption and loss
         proportion = {
-            k: '{:02d}%'.format(int(round(v * 100 / sum(timer.values()))))
+            k: "{:02d}%".format(int(round(v * 100 / sum(timer.values()))))
             for k, v in timer.items()
         }
-        self.print_log(f'\tTraining loss: {np.mean(loss_value):.4f}.  Training acc: {np.mean(acc_value)*100:.2f}%.')
-        self.print_log(f'\tTime consumption: [Data]{proportion["dataloader"]}, [Network]{proportion["model"]}')
+        self.print_log(
+            f"\tTraining loss: {np.mean(loss_value):.4f}.  Training acc: {np.mean(acc_value) * 100:.2f}%."
+        )
+        self.print_log(
+            f"\tTime consumption: [Data]{proportion['dataloader']}, [Network]{proportion['model']}"
+        )
 
         if save_model:
             state_dict = self.model.state_dict()
-            weights = OrderedDict([[k.split('module.')[-1], v.cpu()] for k, v in state_dict.items()])
+            weights = OrderedDict(
+                [[k.split("module.")[-1], v.cpu()] for k, v in state_dict.items()]
+            )
 
-            torch.save(weights, f'{self.arg.work_dir}/runs-{epoch+1}-{int(self.global_step)}.pt')
+            torch.save(
+                weights,
+                f"{self.arg.work_dir}/runs-{epoch + 1}-{int(self.global_step)}.pt",
+            )
 
-    def eval(self, epoch, save_score=False, loader_name=['test'], save_z=False):
+    def eval(self, epoch, save_score=False, loader_name=["test"], save_z=False):
         self.model.eval()
-        self.print_log('Eval epoch: {}'.format(epoch + 1))
+        self.print_log("Eval epoch: {}".format(epoch + 1))
         for ln in loader_name:
             loss_value = []
             cls_loss_value = []
@@ -327,7 +361,9 @@ class Processor():
                     y_hat, z = self.model(data)
                     if save_z:
                         z_list.append(z.data.cpu().numpy())
-                    mmd_loss, l2_z_mean, z_mean = get_mmd_loss(z, self.model.z_prior, y, self.arg.num_class)
+                    mmd_loss, l2_z_mean, z_mean = get_mmd_loss(
+                        z, self.model.z_prior, y, self.arg.num_class
+                    )
                     cos_z, dis_z = get_vector_property(z_mean)
                     cos_z_prior, dis_z_prior = get_vector_property(self.model.z_prior)
                     cos_z_value.append(cos_z.data.item())
@@ -335,7 +371,11 @@ class Processor():
                     cos_z_prior_value.append(cos_z_prior.data.item())
                     dis_z_prior_value.append(dis_z_prior.data.item())
                     cls_loss = self.loss(y_hat, y)
-                    loss = self.arg.lambda_2*mmd_loss + self.arg.lambda_1*l2_z_mean + cls_loss
+                    loss = (
+                        self.arg.lambda_2 * mmd_loss
+                        + self.arg.lambda_1 * l2_z_mean
+                        + cls_loss
+                    )
                     score_frag.append(y_hat.data.cpu().numpy())
                     loss_value.append(loss.data.item())
                     cls_loss_value.append(cls_loss.data.item())
@@ -351,20 +391,29 @@ class Processor():
             cls_loss = np.mean(cls_loss_value)
             mmd_loss = np.mean(mmd_loss_value)
             l2_z_mean_loss = np.mean(l2_z_mean_value)
-            if 'ucla' in self.arg.feeder:
+            if "ucla" in self.arg.feeder:
                 self.data_loader[ln].dataset.sample_name = np.arange(len(score))
 
-            score_dict = dict(
-                zip(self.data_loader[ln].dataset.sample_name, score))
-            self.print_log('\tMean {} loss of {} batches: {:4f}.'.format(
-                ln, self.arg.n_desired//self.arg.batch_size, np.mean(cls_loss_value)))
+            score_dict = dict(zip(self.data_loader[ln].dataset.sample_name, score))
+            self.print_log(
+                "\tMean {} loss of {} batches: {:4f}.".format(
+                    ln,
+                    self.arg.n_desired // self.arg.batch_size,
+                    np.mean(cls_loss_value),
+                )
+            )
             for k in self.arg.show_topk:
-                self.print_log('\tTop{}: {:.2f}%'.format(
-                    k, 100 * self.data_loader[ln].dataset.top_k(score, k)))
+                self.print_log(
+                    "\tTop{}: {:.2f}%".format(
+                        k, 100 * self.data_loader[ln].dataset.top_k(score, k)
+                    )
+                )
 
             if save_score:
-                with open('{}/epoch{}_{}_score.pkl'.format(
-                        self.arg.work_dir, epoch + 1, ln), 'wb') as f:
+                with open(
+                    "{}/epoch{}_{}_score.pkl".format(self.arg.work_dir, epoch + 1, ln),
+                    "wb",
+                ) as f:
                     pickle.dump(score_dict, f)
 
             accuracy = self.data_loader[ln].dataset.top_k(score, 1)
@@ -372,68 +421,106 @@ class Processor():
                 self.best_acc = accuracy
                 self.best_acc_epoch = epoch + 1
                 state_dict = self.model.state_dict()
-                weights = OrderedDict([[k.split('module.')[-1], v.cpu()] for k, v in state_dict.items()])
-                torch.save(weights, f'{self.arg.work_dir}/runs-{epoch+1}-{int(self.global_step)}.pt')
-                with open(f'{self.arg.work_dir}/best_score.pkl', 'wb') as f:
+                weights = OrderedDict(
+                    [[k.split("module.")[-1], v.cpu()] for k, v in state_dict.items()]
+                )
+                torch.save(
+                    weights,
+                    f"{self.arg.work_dir}/runs-{epoch + 1}-{int(self.global_step)}.pt",
+                )
+                with open(f"{self.arg.work_dir}/best_score.pkl", "wb") as f:
                     pickle.dump(score_dict, f)
 
-            print('Accuracy: ', accuracy, ' model: ', self.arg.model_saved_name)
+            print("Accuracy: ", accuracy, " model: ", self.arg.model_saved_name)
             # acc for each class:
             label_list = np.concatenate(label_list)
             pred_list = np.concatenate(pred_list)
 
             if save_z:
                 z_list = np.concatenate(z_list)
-                np.savez(f'{self.arg.work_dir}/z_values.npz', z=z_list, z_prior=self.model.z_prior.cpu().numpy(), y=label_list)
+                np.savez(
+                    f"{self.arg.work_dir}/z_values.npz",
+                    z=z_list,
+                    z_prior=self.model.z_prior.cpu().numpy(),
+                    y=label_list,
+                )
 
     def start(self):
-        if self.arg.phase == 'train':
-            self.print_log('Parameters:\n{}\n'.format(str(vars(self.arg))))
+        if self.arg.phase == "train":
+            self.print_log("Parameters:\n{}\n".format(str(vars(self.arg))))
             self.global_step = 0
+
             def count_parameters(model):
                 return sum(p.numel() for p in model.parameters() if p.requires_grad)
-            self.print_log(f'# Parameters: {count_parameters(self.model)}')
+
+            self.print_log(f"# Parameters: {count_parameters(self.model)}")
             for epoch in range(self.arg.start_epoch, self.arg.num_epoch):
-                save_model = (epoch + 1 == self.arg.num_epoch) and (epoch + 1 > self.arg.save_epoch)
+                save_model = (epoch + 1 == self.arg.num_epoch) and (
+                    epoch + 1 > self.arg.save_epoch
+                )
 
                 self.train(epoch, save_model=save_model)
 
                 # if epoch > 80:
-                self.eval(epoch, save_score=self.arg.save_score, loader_name=['test'])
+                self.eval(epoch, save_score=self.arg.save_score, loader_name=["test"])
 
             # test the best model
-            weights_path = glob.glob(os.path.join(self.arg.work_dir, 'runs-'+str(self.best_acc_epoch)+'*'))[0]
+            weights_path = glob.glob(
+                os.path.join(
+                    self.arg.work_dir, "runs-" + str(self.best_acc_epoch) + "*"
+                )
+            )[0]
             weights = torch.load(weights_path)
             self.model.load_state_dict(weights)
 
             self.arg.print_log = False
-            self.eval(epoch=0, save_score=True, loader_name=['test'])
+            self.eval(epoch=0, save_score=True, loader_name=["test"])
             self.arg.print_log = True
 
+            num_params = sum(
+                p.numel() for p in self.model.parameters() if p.requires_grad
+            )
+            self.print_log(f"Best accuracy: {self.best_acc}")
+            self.print_log(f"Epoch number: {self.best_acc_epoch}")
+            self.print_log(f"Model name: {self.arg.work_dir}")
+            self.print_log(f"Model total number of params: {num_params}")
+            self.print_log(f"Weight decay: {self.arg.weight_decay}")
+            self.print_log(f"Base LR: {self.arg.base_lr}")
+            self.print_log(f"Batch Size: {self.arg.batch_size}")
+            self.print_log(f"Test Batch Size: {self.arg.test_batch_size}")
+            self.print_log(f"seed: {self.arg.seed}")
 
-            num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-            self.print_log(f'Best accuracy: {self.best_acc}')
-            self.print_log(f'Epoch number: {self.best_acc_epoch}')
-            self.print_log(f'Model name: {self.arg.work_dir}')
-            self.print_log(f'Model total number of params: {num_params}')
-            self.print_log(f'Weight decay: {self.arg.weight_decay}')
-            self.print_log(f'Base LR: {self.arg.base_lr}')
-            self.print_log(f'Batch Size: {self.arg.batch_size}')
-            self.print_log(f'Test Batch Size: {self.arg.test_batch_size}')
-            self.print_log(f'seed: {self.arg.seed}')
-
-        elif self.arg.phase == 'test':
+        elif self.arg.phase == "test":
             if self.arg.weights is None:
-                raise ValueError('Please appoint --weights.')
+                raise ValueError("Please appoint --weights.")
             self.arg.print_log = False
-            self.print_log('Model:   {}.'.format(self.arg.model))
-            self.print_log('Weights: {}.'.format(self.arg.weights))
-            self.eval(epoch=0, save_score=self.arg.save_score, loader_name=['test'], save_z=True)
-            self.print_log('Done.\n')
+            self.print_log("Model:   {}.".format(self.arg.model))
+            self.print_log("Weights: {}.".format(self.arg.weights))
+            self.eval(
+                epoch=0,
+                save_score=self.arg.save_score,
+                loader_name=["test"],
+                save_z=True,
+            )
+            self.print_log("Done.\n")
+
 
 def main():
     # parser arguments
     parser = get_parser()
+
+    # load arg from config file if specified
+    p = parser.parse_args()
+    if p.config is not None:
+        with open(p.config, "r", encoding="utf-8") as f:
+            default_arg = yaml.load(f, Loader=yaml.SafeLoader)
+        key = vars(p).keys()
+        for k in default_arg.keys():
+            if k not in key:
+                print("WRONG ARG: {}".format(k))
+                assert k in key
+        parser.set_defaults(**default_arg)
+
     arg = parser.parse_args()
     arg.work_dir = f"results/{arg.dataset}_{arg.datacase}"
     init_seed(arg.seed)
@@ -441,5 +528,6 @@ def main():
     processor = Processor(arg)
     processor.start()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

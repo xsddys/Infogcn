@@ -15,6 +15,7 @@ def get_parser():
     parser = argparse.ArgumentParser(
         description="Spatial Temporal Graph Convolution Network"
     )
+    parser.add_argument("--config", default=None, help="path to the configuration file")
     parser.add_argument(
         "--debug", type=str2bool, default=False, help="Debug mode; default false"
     )

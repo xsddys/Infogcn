@@ -1,0 +1,61 @@
+# 基本配置
+debug: false
+log_dir: "."
+model_saved_name: ""
+noise_ratio: 0.5
+
+# 数据相关参数
+n_desired: 40000
+num_point: 20
+num_person: 1
+num_class: 10
+dataset: "NW-UCLA"
+datacase: "bone"
+use_vel: false
+
+# 处理器配置
+phase: "train"
+save_score: false
+
+# 可视化和调试参数
+seed: 1
+log_interval: 100
+save_interval: 1
+save_epoch: 60
+eval_interval: 5
+print_log: true
+show_topk: [1, 5]
+
+# 数据加载器配置
+feeder: "feeders.feeder_ucla.Feeder"
+num_worker: 8
+balanced_sampling: false
+random_rot: true
+repeat: 1
+
+# 模型配置
+weights: null
+ignore_weights: []
+n_heads: 3
+k: 1
+z_prior_gain: 3
+graph: "graph.ucla.Graph"
+
+# 优化器配置
+base_lr: 0.01
+step: [90, 100]
+optimizer: "SGD"
+nesterov: true
+batch_size: 32
+test_batch_size: 32
+start_epoch: 0
+num_epoch: 110
+weight_decay: 0.0005
+lr_decay_rate: 0.1
+warm_up_epoch: 5
+lambda_1: 0.0001
+lambda_2: 0.1
+
+# APEX配置
+half: false
+amp_opt_level: 1
