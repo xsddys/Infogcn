@@ -30,6 +30,12 @@ def get_parser():
     parser.add_argument("--num_class", type=int, default=10, help="")
     parser.add_argument("--dataset", default="NW-UCLA", help="data loader will be used")
     parser.add_argument("--datacase", default="bone", help="data loader will be used")
+    parser.add_argument(
+        "--use_bone", type=str2bool, default=False, help="使用骨骼模态数据"
+    )
+    parser.add_argument(
+        "--use_motion", type=str2bool, default=False, help="使用运动模态数据"
+    )
     parser.add_argument("--use_vel", type=str2bool, default=False, help="")
 
     # processor

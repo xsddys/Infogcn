@@ -10,7 +10,9 @@ num_point: 20
 num_person: 1
 num_class: 10
 dataset: "NW-UCLA"
-datacase: "bone"
+datacase: "bone"  # 暂时遗留
+use_bone: true
+use_motion: false
 use_vel: false
 
 # 处理器配置

@@ -92,14 +92,20 @@ class Processor:
         Feeder = import_class(self.arg.feeder)
         self.data_loader = dict()
         data_path = f"data/{self.arg.dataset}/{self.arg.datacase}_aligned.npz"
+
+        # 提取模态信息，不再从路径名判断
+        use_bone = self.arg.use_bone
+        use_motion = self.arg.use_motion
+
         if self.arg.phase == "train":
             dt = Feeder(
                 data_path=data_path,
                 split="train",
                 window_size=64,
                 p_interval=[0.5, 1],
-                vel=self.arg.use_vel,
                 random_rot=self.arg.random_rot,
+                bone=use_bone,  # 显式传递bone参数
+                motion=use_motion,  # 显式传递motion参数
                 sort=True if self.arg.balanced_sampling else False,
             )
             if self.arg.balanced_sampling:
@@ -124,7 +130,8 @@ class Processor:
                 split="test",
                 window_size=64,
                 p_interval=[0.95],
-                vel=self.arg.use_vel,
+                bone=use_bone,  # 显式传递bone参数
+                motion=use_motion,  # 显式传递motion参数
             ),
             batch_size=self.arg.test_batch_size,
             shuffle=False,
@@ -135,11 +142,29 @@ class Processor:
         )
 
     def load_model(self):
+        # 初始化图结构，根据模态选择合适的图表示
+        if self.arg.dataset == "NW-UCLA":
+            from graph.ucla import Graph
+
+            graph_args = {"labeling_mode": "spatial"}
+
+            # 如果使用骨骼模态，则自动使用骨骼对偶图
+            if self.arg.use_bone:
+                graph_args["use_bone_dual"] = True
+                self.print_log("使用UCLA骨骼对偶图结构")
+
+            self.graph = Graph(**graph_args)
+
+            # 更新num_point参数以匹配对偶图的节点数
+            if self.arg.use_bone:
+                self.arg.num_point = self.graph.num_node
+                self.print_log(f"更新节点数为骨骼数量: {self.arg.num_point}")
+
         self.model = InfoGCN(
             num_class=self.arg.num_class,
             num_point=self.arg.num_point,
             num_person=self.arg.num_person,
-            graph=self.arg.graph,
+            graph=self.graph,  # 传递图对象
             in_channels=3,
             drop_out=0,
             num_head=self.arg.n_heads,
