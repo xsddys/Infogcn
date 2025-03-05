@@ -22,7 +22,6 @@ if platform.system() != "Windows":
 
 from collections import OrderedDict
 
-import apex
 import numpy as np
 import torch
 import torch.optim as optim
@@ -77,16 +76,15 @@ class Processor:
         self.best_acc = 0
         self.best_acc_epoch = 0
 
-        model = self.model.cuda()
+        # Move model to CUDA
+        self.model = self.model.cuda()
 
+        # Check if half-precision training was requested but removed
         if self.arg.half:
-            self.model, self.optimizer = apex.amp.initialize(
-                model, self.optimizer, opt_level=f"O{self.arg.amp_opt_level}"
+            raise NotImplementedError(
+                "Half-precision training with APEX has been removed from this implementation. "
+                "Please set --half=False in your arguments."
             )
-            if self.arg.amp_opt_level != 1:
-                self.print_log(
-                    '[WARN] nn.DataParallel is not yet supported by amp_opt_level != "O1"'
-                )
 
         # self.model = torch.nn.DataParallel(model, device_ids=(0,1,2))
 
@@ -294,12 +292,7 @@ class Processor:
             )
             # backward
             self.optimizer.zero_grad()
-            if self.arg.half:
-                with apex.amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
-
+            loss.backward()
             self.optimizer.step()
 
             loss_value.append(cls_loss.data.item())
