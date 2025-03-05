@@ -5,3 +5,5 @@ __pycache__
 *ipynb
 *.pt
 *.yaml
+data/
+results/

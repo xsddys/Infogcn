@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 
 def ensemble(ds, items):
-    if 'ntu120' in ds:
+    if 'ntu120' in ds.lower():
         num_class=120
         if 'xsub' in ds:
             npz_data = np.load('./data/ntu120/CSub_aligned.npz')
@@ -12,7 +12,7 @@ def ensemble(ds, items):
         elif 'xset' in ds:
             npz_data = np.load('./data/ntu120/CSet_aligned.npz')
             label = np.where(npz_data['y_test'] > 0)[1]
-    elif 'ntu' in ds:
+    elif 'ntu' in ds.lower():
         num_class=60
         if 'xsub' in ds:
             npz_data = np.load('./data/ntu/CS_aligned.npz')
@@ -20,12 +20,16 @@ def ensemble(ds, items):
         elif 'xview' in ds:
             npz_data = np.load('./data/ntu/CV_aligned.npz')
             label = np.where(npz_data['y_test'] > 0)[1]
-    elif 'ucla' in ds:
-        num_class=10
-        npz_data = np.load('./data/ntu/CS_aligned.npz')
-        label = np.where(npz_data['y_test'] > 0)[1]
+    elif 'ucla' in ds.lower():
+        num_class = 10
+        label = []
+        with open('./data/' + 'NW-UCLA/' + '/val_label.pkl', 'rb') as f:
+            data_info = pickle.load(f)
+            for index in range(len(data_info)):
+                info = data_info[index]
+                label.append(int(info['label']) - 1)
     else:
-        raise NotImplementedError
+        raise NotImplementedError(f"Dataset {ds} not implemented")
 
     ckpt_dirs, alphas = list(zip(*items))
 
@@ -44,9 +48,9 @@ def ensemble(ds, items):
             r += r11 * alpha
 
         rank_5 = r.argsort()[-5:]
-        right_num_5 += int(int(l) in rank_5)
+        right_num_5 += int(l in rank_5)
         r = np.argmax(r)
-        right_num += int(r == int(l))
+        right_num += int(r == l)
         total_num += 1
 
     acc = right_num / total_num

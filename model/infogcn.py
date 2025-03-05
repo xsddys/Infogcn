@@ -62,7 +62,7 @@ class InfoGCN(nn.Module):
         Graph = import_class(graph)()
         A_outward = Graph.A_outward_binary
         I = np.eye(Graph.num_node)
-        return  torch.from_numpy(I - np.linalg.matrix_power(A_outward, k))
+        return torch.from_numpy(I - np.linalg.matrix_power(A_outward, k)).float()
 
     def latent_sample(self, mu, logvar):
         if self.training:
@@ -78,7 +78,7 @@ class InfoGCN(nn.Module):
     def forward(self, x):
         N, C, T, V, M = x.size()
         x = rearrange(x, 'n c t v m -> (n m t) v c', m=M, v=V).contiguous()
-        x = self.A_vector.to(x.device).expand(N*M*T, -1, -1) @ x
+        x = self.A_vector.float().to(x.device).expand(N*M*T, -1, -1) @ x
 
         x = self.to_joint_embedding(x)
         x += self.pos_embedding[:, :self.num_point]

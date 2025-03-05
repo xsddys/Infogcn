@@ -18,11 +18,11 @@ def get_parser():
 
     # data
     parser.add_argument('--n_desired', type=int, default=40000, help='')
-    parser.add_argument('--num_point', type=int, default=25, help='')
-    parser.add_argument('--num_person', type=int, default=2, help='')
-    parser.add_argument('--num_class', type=int, default=60, help='')
-    parser.add_argument('--dataset', default='ntu', help='data loader will be used')
-    parser.add_argument('--datacase', default='CS', help='data loader will be used')
+    parser.add_argument('--num_point', type=int, default=20, help='')
+    parser.add_argument('--num_person', type=int, default=1, help='')
+    parser.add_argument('--num_class', type=int, default=10, help='')
+    parser.add_argument('--dataset', default='NW-UCLA', help='data loader will be used')
+    parser.add_argument('--datacase', default='motion_bone', help='data loader will be used')
     parser.add_argument('--use_vel', type=str2bool, default=False, help='')
 
 
@@ -40,7 +40,7 @@ def get_parser():
     parser.add_argument('--show_topk', type=int, default=[1, 5], nargs='+', help='which Top K accuracy will be shown')
 
     # feeder
-    parser.add_argument('--feeder', default='feeders.feeder_ntu.Feeder', help='data loader will be used')
+    parser.add_argument('--feeder', default='feeders.feeder_ucla.Feeder', help='data loader will be used')
     parser.add_argument('--num_worker', type=int, default=8, help='the number of worker for data loader')
     parser.add_argument('--balanced_sampling', type=str2bool, default=False, help='the number of worker for data loader')
     parser.add_argument('--random_rot', type=str2bool, default=True, help='')
@@ -50,17 +50,17 @@ def get_parser():
     parser.add_argument('--weights', default=None, help='the weights for network initialization')
     parser.add_argument('--ignore_weights', type=str, default=[], nargs='+', help='the name of weights which will be ignored in the initialization')
     parser.add_argument('--n_heads', type=int, default=3, help='')
-    parser.add_argument('--k', type=int, default=0, help='')
+    parser.add_argument('--k', type=int, default=1, help='')
     parser.add_argument('--z_prior_gain', type=int, default=3, help='')
-    parser.add_argument('--graph', type=str, default='graph.ntu_rgb_d.Graph', help='')
+    parser.add_argument('--graph', type=str, default='graph.ucla.Graph', help='')
 
     # optim
-    parser.add_argument('--base_lr', type=float, default=0.1, help='initial learning rate')
+    parser.add_argument('--base_lr', type=float, default=0.01, help='initial learning rate')
     parser.add_argument('--step', type=int, default=[90, 100], nargs='+', help='the epoch where optimizer reduce the learning rate')
     parser.add_argument('--optimizer', default='SGD', help='type of optimizer')
     parser.add_argument('--nesterov', type=str2bool, default=True, help='use nesterov or not')
-    parser.add_argument('--batch_size', type=int, default=64, help='training batch size')
-    parser.add_argument('--test_batch_size', type=int, default=64, help='test batch size')
+    parser.add_argument('--batch_size', type=int, default=32, help='training batch size')
+    parser.add_argument('--test_batch_size', type=int, default=32, help='test batch size')
     parser.add_argument('--start_epoch', type=int, default=0, help='start training from which epoch')
     parser.add_argument('--num_epoch', type=int, default=110, help='stop training in which epoch')
     parser.add_argument('--weight_decay', type=float, default=0.0005, help='weight decay for optimizer')
@@ -70,7 +70,7 @@ def get_parser():
     parser.add_argument('--lambda_2', type=float, default=1e-1)
 
     # apex
-    parser.add_argument('--half', type=str2bool, default=True, help='Use half-precision (FP16) training')
+    parser.add_argument('--half', type=str2bool, default=False, help='Use half-precision (FP16) training')
     parser.add_argument('--amp_opt_level', type=int, default=1, help='NVIDIA Apex AMP optimization level')
 
     return parser

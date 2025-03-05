@@ -100,7 +100,7 @@ class Feeder(Dataset):
             random_idx = random.sample(list(np.arange(length))*100, self.time_steps)
             random_idx.sort()
             data[:,:,:] = value[random_idx,:,:]
-            data[:,:,:] = value[random_idx,:,:]
+            
 
         else:
             random.random()
@@ -123,7 +123,7 @@ class Feeder(Dataset):
             value = scalerValue[:,:,:]
             length = value.shape[0]
 
-            idx = np.linspace(0,length-1,self.time_steps).astype(np.int)
+            idx = np.linspace(0,length-1,self.time_steps).astype(np.int32)
             data[:,:,:] = value[idx,:,:] # T,V,C
 
         if 'bone' in self.data_path:
