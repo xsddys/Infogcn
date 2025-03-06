@@ -81,7 +81,7 @@ class Graph:
             self.A_binary_K = tools.get_k_scale_graph(scale, self.A_binary)
 
     def create_bone_dual_graph(self):
-        """创建骨骼对偶图（线图）"""
+        """创建骨骼对偶图（线图）并定义基于根骨骼的向心/离心关系"""
         # 构建原始关节图
         G = nx.Graph()
         for i in range(num_node):
@@ -96,36 +96,74 @@ class Graph:
 
         # 创建边到索引的映射
         edge_to_idx = {}
+        idx_to_edge = {}
         for idx, (i, j) in enumerate(inward):
-            # 存储规范化的边（小节点在前）
             edge = tuple(sorted([i, j]))
             edge_to_idx[edge] = idx
+            idx_to_edge[idx] = edge
 
         # 构建骨骼对偶图的边列表
         dual_edges = []
         for e1, e2 in L.edges():
-            # 将NetworkX的边表示转换为我们的索引
             idx1 = edge_to_idx[tuple(sorted(e1))]
             idx2 = edge_to_idx[tuple(sorted(e2))]
             dual_edges.append((idx1, idx2))
 
+        # 定义骨骼对偶图中的根节点（对应于第一条边，即头部-躯干连接）
+        root_bone_idx = 0  # 第一条骨骼通常是连接头部和躯干的骨骼
+
+        # 创建对偶图结构用于计算距离
+        DG = nx.Graph()
+        for i in range(len(inward)):
+            DG.add_node(i)
+        for i, j in dual_edges:
+            DG.add_edge(i, j)
+
+        # 计算每个骨骼节点到根骨骼的距离
+        distances = nx.shortest_path_length(DG, source=root_bone_idx)
+
+        # 基于距离定义向心和离心关系
+        bone_dual_inward = []  # 向心（朝向根部）
+        bone_dual_outward = []  # 离心（远离根部）
+
+        for i, j in dual_edges:
+            if distances[j] < distances[i]:  # j比i更接近根部
+                bone_dual_inward.append((i, j))
+                bone_dual_outward.append((j, i))
+            elif distances[i] < distances[j]:  # i比j更接近根部
+                bone_dual_inward.append((j, i))
+                bone_dual_outward.append((i, j))
+            else:  # 距离相同，使用索引比较或其他规则
+                if i < j:
+                    bone_dual_inward.append((j, i))
+                    bone_dual_outward.append((i, j))
+                else:
+                    bone_dual_inward.append((i, j))
+                    bone_dual_outward.append((j, i))
+
+        # 存储定义的向心和离心关系
+        self.bone_dual_inward = bone_dual_inward
+        self.bone_dual_outward = bone_dual_outward
+
         return dual_edges
 
     def get_dual_adjacency_matrix(self):
-        """为骨骼对偶图生成邻接矩阵"""
-        # 获取骨骼数量（即对偶图的节点数）
-        num_bones = self.num_node  # 已更新为骨骼数量
+        """为骨骼对偶图生成基于层次距离的邻接矩阵"""
+        num_bones = self.num_node
 
-        # 创建空的邻接矩阵
-        A = np.zeros((3, num_bones, num_bones))
+        # 创建自连接
+        I = np.eye(num_bones)
 
-        # 填充自连接
-        A[0] = np.eye(num_bones)
+        # 创建并归一化向心和离心连接
+        In = tools.normalize_digraph(
+            tools.get_adjacency_matrix(self.bone_dual_inward, num_bones)
+        )
+        Out = tools.normalize_digraph(
+            tools.get_adjacency_matrix(self.bone_dual_outward, num_bones)
+        )
 
-        # 填充骨骼对偶图的边
-        for i, j in self.bone_dual_edges:
-            A[1, i, j] = 1
-            A[2, j, i] = 1
+        # 堆叠三种连接
+        A = np.stack((I, In, Out))
 
         return A
 
