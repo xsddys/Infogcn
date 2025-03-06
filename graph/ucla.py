@@ -11,6 +11,7 @@ self_link = [(i, i) for i in range(num_node)]
 inward_ori_index = [
     (1, 2),
     (2, 3),
+    (3, 3),
     (4, 3),
     (5, 3),
     (6, 5),
