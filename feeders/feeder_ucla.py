@@ -1673,22 +1673,24 @@ class Feeder(Dataset):
 
         # 使用显式参数控制模态处理，而不是依赖文件路径
         if self.use_bone:
-            data_bone = np.zeros_like(data)
-            for bone_idx in range(len(self.bone)):
-                data_bone[:, self.bone[bone_idx][0] - 1, :] = (
-                    data[:, self.bone[bone_idx][0] - 1, :]
-                    - data[:, self.bone[bone_idx][1] - 1, :]
-                )
+            # 创建新的骨骼数据数组，维度为[时间步, 骨骼数, 坐标维度]
+            bone_data = np.zeros((data.shape[0], len(self.bone), data.shape[2]))
 
-            # 修改1: 如果使用骨骼模态，将数据转换为骨骼表示
-            # 只保留对应于骨骼的节点，节点数量等于骨骼数量（19）
-            # 每个节点表示一条骨骼
-            data = data_bone[:, : len(self.bone), :]
+            # 按照inward列表的顺序填充骨骼数据
+            for bone_idx, (joint1, joint2) in enumerate(self.bone):
+                # 计算骨骼向量（从joint2指向joint1的向量）
+                bone_vector = data[:, joint1 - 1, :] - data[:, joint2 - 1, :]
+                # 将骨骼向量存储在对应的位置
+                bone_data[:, bone_idx, :] = bone_vector
+
+            # 使用骨骼数据替换原始关节数据
+            data = bone_data
 
         if self.use_motion:
             data_motion = np.zeros_like(data)
             data_motion[:-1, :, :] = data[1:, :, :] - data[:-1, :, :]
             data = data_motion
+
         data = np.transpose(data, (2, 0, 1))
         C, T, V = data.shape
         data = np.reshape(data, (C, T, V, 1))
