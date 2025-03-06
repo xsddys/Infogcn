@@ -55,9 +55,10 @@ class Graph:
 
             self.A = self.get_dual_adjacency_matrix()
 
-            # 添加A_outward_binary属性（为了兼容性考虑），但使用所有边而不只是离心边
-            all_edges = self.bone_dual_inward + self.bone_dual_outward
-            self.A_outward_binary = tools.get_adjacency_matrix(all_edges, self.num_node)
+            # 添加A_outward_binary属性，用于对偶图
+            self.A_outward_binary = tools.get_adjacency_matrix(
+                self.bone_dual_outward, self.num_node
+            )
 
             # 更新其他骨骼对偶图的属性
             self.A_binary = tools.edge2mat(
@@ -151,7 +152,7 @@ class Graph:
         num_bones = self.num_node
 
         # 创建自连接
-        eye = np.eye(num_bones)
+        I = np.eye(num_bones)
 
         # 创建并归一化向心和离心连接
         In = tools.normalize_digraph(
@@ -162,7 +163,7 @@ class Graph:
         )
 
         # 堆叠三种连接
-        A = np.stack((eye, In, Out))
+        A = np.stack((I, In, Out))
 
         return A
 
