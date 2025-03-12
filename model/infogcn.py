@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from einops import rearrange
 from torch import nn
 
-from model.modules import EncodingBlock, bn_init, import_class
+from model.modules import EncodingBlockWithAttention, bn_init, import_class
 
 
 class InfoGCN(nn.Module):
@@ -38,15 +38,19 @@ class InfoGCN(nn.Module):
         self.to_joint_embedding = nn.Linear(in_channels, base_channel)
         self.pos_embedding = nn.Parameter(torch.randn(1, self.num_point, base_channel))
 
-        self.l1 = EncodingBlock(base_channel, base_channel, A)
-        self.l2 = EncodingBlock(base_channel, base_channel, A)
-        self.l3 = EncodingBlock(base_channel, base_channel, A)
-        self.l4 = EncodingBlock(base_channel, base_channel * 2, A, stride=2)
-        self.l5 = EncodingBlock(base_channel * 2, base_channel * 2, A)
-        self.l6 = EncodingBlock(base_channel * 2, base_channel * 2, A)
-        self.l7 = EncodingBlock(base_channel * 2, base_channel * 4, A, stride=2)
-        self.l8 = EncodingBlock(base_channel * 4, base_channel * 4, A)
-        self.l9 = EncodingBlock(base_channel * 4, base_channel * 4, A)
+        self.l1 = EncodingBlockWithAttention(base_channel, base_channel, A)
+        self.l2 = EncodingBlockWithAttention(base_channel, base_channel, A)
+        self.l3 = EncodingBlockWithAttention(base_channel, base_channel, A)
+        self.l4 = EncodingBlockWithAttention(
+            base_channel, base_channel * 2, A, stride=2
+        )
+        self.l5 = EncodingBlockWithAttention(base_channel * 2, base_channel * 2, A)
+        self.l6 = EncodingBlockWithAttention(base_channel * 2, base_channel * 2, A)
+        self.l7 = EncodingBlockWithAttention(
+            base_channel * 2, base_channel * 4, A, stride=2
+        )
+        self.l8 = EncodingBlockWithAttention(base_channel * 4, base_channel * 4, A)
+        self.l9 = EncodingBlockWithAttention(base_channel * 4, base_channel * 4, A)
         self.fc = nn.Linear(base_channel * 4, base_channel * 4)
         self.fc_mu = nn.Linear(base_channel * 4, base_channel * 4)
         self.fc_logvar = nn.Linear(base_channel * 4, base_channel * 4)
