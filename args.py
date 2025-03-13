@@ -36,6 +36,12 @@ def get_parser():
     parser.add_argument(
         "--use_motion", type=str2bool, default=False, help="使用运动模态数据"
     )
+    parser.add_argument(
+        "--use_temporal_pos",
+        type=str2bool,
+        default=False,
+        help="use temporal position encoding",
+    )
     parser.add_argument("--use_vel", type=str2bool, default=False, help="")
 
     # processor
